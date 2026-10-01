@@ -1,6 +1,6 @@
 # Validation — 2026-10-01
 
-SDK: `@cursor/sdk` 1.0.35. Runtime: Node 22.22.3 on macOS arm64. Live model: explicitly selected `composer-2.5`, also reported by the returned run result. The live pilots used the catalog default parameter set; standard-mode fleet assessment is a separate run.
+SDK: `@cursor/sdk` 1.0.35. Runtime: Node 22.22.3 on macOS arm64. Live model: explicitly selected `composer-2.5`, also reported by the returned run result. The fixture pilots used the catalog default parameter set. Three subsequent private assessment roles all passed their artifact/schema checks with requested and reported `fast=false` (standard mode). Their findings were independently reconciled; file/schema PASS is not factual acceptance.
 
 ## Executed proof
 
@@ -8,8 +8,8 @@ SDK: `@cursor/sdk` 1.0.35. Runtime: Node 22.22.3 on macOS arm64. Live model: exp
 - Full Ringer local integration: PASS, one attempt, approximately 11 seconds.
 - Full Ringer cloud integration: PASS, one corrected attempt, approximately 110 seconds. Cloud artifacts downloaded and verified locally.
 - Both successful Ringer pilots returned SHA-256 `30dcdbf162665fb1cf944190dbbc279a0af76020a28cf18259a8c9bc5da584d3`.
-- Adapter CI passes on macOS and Linux. Live SDK model execution has been exercised on macOS and Cursor-hosted cloud; Linux CI uses a fake provider.
-- Ringer integration has 46 focused passing tests, including routing restrictions and no automatic Cursor retries.
+- All 39 adapter tests pass; CI passes on macOS and Linux. Live SDK model execution has been exercised on macOS and Cursor-hosted cloud; Linux CI uses a fake provider.
+- Ringer integration has 46 focused passing tests, including routing restrictions and no automatic Cursor retries. The PR full macOS suite passes. The broader Ubuntu job is blocked by missing `bubblewrap` in existing OpenRouter wrapper tests; the optional Windows harness also fails. See the Ringer PR for current CI details.
 
 ## Failure preserved
 

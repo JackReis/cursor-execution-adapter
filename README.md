@@ -21,7 +21,7 @@ node dist/cli.js catalog > cursor-models.json
 
 `catalog` preserves the current account-visible model IDs, aliases, parameters, variants, fetch time, and SDK version. Choose canonical IDs, not ambiguous `latest` aliases; `default`, `auto`, and `auto-smart` routing are rejected. Listing a model does not prove cloud eligibility or actual inference.
 
-Optional `modelParams` in a request is an array of `{ "id": "fast", "value": "false" }` entries, validated against the live model catalog before launch. Composer 2.5 advertises standard and Fast modes; sample requests explicitly choose standard mode. Parameters are model-specific. Requested and reported parameters are retained separately in receipts.
+Optional `modelParams` in a request is an array of `{ "id": "fast", "value": "false" }` entries, validated against the live model catalog before launch. Composer 2.5 advertises standard and Fast modes; sample requests explicitly choose standard mode for Composer 2.5. Remove or change those parameters when choosing a different model. Parameters are model-specific. Requested and reported parameters are retained separately in receipts.
 
 SDK requests consume Cursor plan usage; check your account's allowance and overage settings before running. The adapter neither changes billing settings nor falls back to another provider.
 
