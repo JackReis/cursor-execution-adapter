@@ -214,12 +214,14 @@ test("abort confirms cancellation and prevents subsequent dispatch", async (t) =
   const controller = new AbortController();
   f.o.signal = controller.signal;
   let cancel = false;
-  f.run.wait = async () =>
-    cancel ? { status: "cancelled" } : new Promise(() => {});
+  f.run.wait = async () => {
+    if (cancel) return { status: "cancelled" };
+    queueMicrotask(() => controller.abort());
+    return new Promise(() => {});
+  };
   f.run.cancel = async () => {
     cancel = true;
   };
-  setTimeout(() => controller.abort(), 30);
   await assert.rejects(execute(f.o, f.driver), /CANCEL_REQUESTED/);
   const state = JSON.parse(
     await readFile(path.join(f.o.stateDir, "receipt.json")),
@@ -234,11 +236,13 @@ test("unconfirmed cancellation blocks replacement", async (t) => {
   const f = await fixture(t);
   const controller = new AbortController();
   f.o.signal = controller.signal;
-  f.run.wait = async () => new Promise(() => {});
+  f.run.wait = async () => {
+    queueMicrotask(() => controller.abort());
+    return new Promise(() => {});
+  };
   f.run.cancel = async () => {
     throw Error("offline");
   };
-  setTimeout(() => controller.abort(), 30);
   await assert.rejects(execute(f.o, f.driver));
   const s = JSON.parse(await readFile(path.join(f.o.stateDir, "receipt.json")));
   assert.equal(s.status, "cancellation_unconfirmed");
