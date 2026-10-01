@@ -60,6 +60,11 @@ export interface State {
   resolvedModel?: string;
   requestedModelParams?: { id: string; value: string }[];
   resolvedModelParams?: { id: string; value: string }[];
+  modelParamsVerification?:
+    | "not_requested"
+    | "matched"
+    | "unknown"
+    | "mismatched";
   usage?: unknown;
   error?: string;
 }
@@ -370,6 +375,17 @@ export async function execute(raw: Options, driver: Driver): Promise<State> {
           fail("ARTIFACT_CHANGED");
       return state;
     }
+    if (!state) {
+      for (const file of request.expectFiles) {
+        try {
+          const existing = await fs.lstat(path.join(taskDir, file));
+          if (existing.isSymbolicLink()) fail("UNSAFE_PATH");
+          fail("OUTPUT_ALREADY_EXISTS");
+        } catch (e) {
+          if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw e;
+        }
+      }
+    }
     if (o.signal?.aborted) fail("CANCELLED_BEFORE_SUBMIT");
     if (
       !(
@@ -495,6 +511,19 @@ export async function execute(raw: Options, driver: Driver): Promise<State> {
     if (result.status !== "finished") fail("REMOTE_RUN_FAILED");
     if (result.model?.id && result.model.id !== o.model)
       fail("RESOLVED_MODEL_MISMATCH");
+    const requestedParams = request.modelParams ?? [];
+    const reportedParams = result.model?.params ?? [];
+    state.modelParamsVerification = requestedParams.length
+      ? "matched"
+      : "not_requested";
+    for (const requested of requestedParams) {
+      const reported = reportedParams.filter((p) => p.id === requested.id);
+      if (reported.some((p) => p.value !== requested.value)) {
+        state.modelParamsVerification = "mismatched";
+        fail("RESOLVED_MODEL_PARAMS_MISMATCH");
+      }
+      if (!reported.length) state.modelParamsVerification = "unknown";
+    }
     state.status = "collecting";
     await save(stateDir, state);
     if (o.mode === "cloud") {

@@ -21,7 +21,7 @@ node dist/cli.js catalog > cursor-models.json
 
 `catalog` preserves the current account-visible model IDs, aliases, parameters, variants, fetch time, and SDK version. Choose canonical IDs, not ambiguous `latest` aliases; `default`, `auto`, and `auto-smart` routing are rejected. Listing a model does not prove cloud eligibility or actual inference.
 
-Optional `modelParams` in a request is an array of `{ "id": "fast", "value": "false" }` entries, validated against the live model catalog before launch. Composer 2.5 advertises standard and Fast modes; sample requests explicitly choose standard mode for Composer 2.5. Remove or change those parameters when choosing a different model. Parameters are model-specific. Requested and reported parameters are retained separately in receipts.
+Optional `modelParams` in a request is an array of `{ "id": "fast", "value": "false" }` entries, validated against the live model catalog before launch. Composer 2.5 advertises standard and Fast modes; sample requests explicitly choose standard mode for Composer 2.5. Remove or change those parameters when choosing a different model. Parameters are model-specific. Requested and reported parameters are retained separately in receipts. Contradictory reported values fail the attempt without retry. Missing reported values allow artifact collection but set `modelParamsVerification` to `unknown`; this does not prove requested pricing or effort was applied. Complete matching metadata is `matched`, and no explicit request is `not_requested`.
 
 SDK requests consume Cursor plan usage; check your account's allowance and overage settings before running. The adapter neither changes billing settings nor falls back to another provider.
 
@@ -63,6 +63,8 @@ Do not concurrently mutate the task directory from another process. Filesystem c
 `receipt.json` is stored outside the task directory along with a process lock and local SDK state. It contains requested/observed model identity, agent/run IDs, input fingerprint, usage (or `null` when unavailable), artifact hashes, and lifecycle status. It deliberately omits prompt contents, credentials, and raw provider exceptions.
 
 `artifacts_ready` means files were collected; **it does not mean checks passed**. Ringer owns the final verdict.
+
+A new dispatch requires all declared output paths to be absent; existing files are never accepted as newly produced output. Use a fresh task directory. This check does not apply to recovery of an existing receipt.
 
 Repeat the identical invocation with the same state directory to resume a known run or retry artifact retrieval. A changed request is rejected without altering the original receipt. Ambiguous submissions are reconciled by agent/run lookup and are never blindly resubmitted. If reconciliation cannot find exactly one run, stop and inspect the provider. Failed or cancelled attempts require operator review and a new attempt identity; do not delete state to disguise a retry.
 

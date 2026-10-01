@@ -379,3 +379,76 @@ test("invalid and duplicate model parameters are rejected", () => {
       /INVALID_MODEL_PARAMS/,
     );
 });
+
+test("new dispatch refuses pre-existing outputs without changing them", async (t) => {
+  for (const mode of ["local", "cloud"]) {
+    const f = await fixture(t, mode);
+    await writeFile(path.join(f.o.taskDir, "result.json"), "old result");
+    await assert.rejects(execute(f.o, f.driver), /OUTPUT_ALREADY_EXISTS/);
+    assert.equal(f.counts().created, 0);
+    assert.equal(
+      await readFile(path.join(f.o.taskDir, "result.json"), "utf8"),
+      "old result",
+    );
+  }
+});
+test("contradictory reported model parameters fail and block retry", async (t) => {
+  const f = await fixture(t);
+  f.o.request.modelParams = [{ id: "fast", value: "false" }];
+  f.result.model.params = [{ id: "fast", value: "true" }];
+  await assert.rejects(
+    execute(f.o, f.driver),
+    /RESOLVED_MODEL_PARAMS_MISMATCH/,
+  );
+  const r = JSON.parse(await readFile(path.join(f.o.stateDir, "receipt.json")));
+  assert.equal(r.modelParamsVerification, "mismatched");
+  assert.equal(r.status, "failed");
+  await assert.rejects(
+    execute(f.o, f.driver),
+    /PREVIOUS_ATTEMPT_REQUIRES_REVIEW/,
+  );
+  assert.equal(f.counts().sent, 1);
+});
+test("missing reported parameters remain explicitly unknown", async (t) => {
+  const f = await fixture(t);
+  f.o.request.modelParams = [{ id: "fast", value: "false" }];
+  assert.equal(
+    (await execute(f.o, f.driver)).modelParamsVerification,
+    "unknown",
+  );
+});
+test("all requested parameters must be reported to mark matched", async (t) => {
+  const f = await fixture(t);
+  f.o.request.modelParams = [{ id: "fast", value: "false" }];
+  f.result.model.params = [
+    { id: "fast", value: "false" },
+    { id: "effort", value: "low" },
+  ];
+  assert.equal(
+    (await execute(f.o, f.driver)).modelParamsVerification,
+    "matched",
+  );
+});
+
+test("partial artifact recovery permits outputs from the same receipt", async (t) => {
+  const f = await fixture(t, "cloud");
+  f.o.request.expectFiles = ["result.json", "second.json"];
+  f.session.artifacts = async () =>
+    f.o.request.expectFiles.map((p) => ({
+      path: "artifacts/" + p,
+      sizeBytes: 11,
+    }));
+  const download = f.session.download;
+  f.session.download = async (p) => {
+    if (p.endsWith("second.json")) throw Error("temporary download failure");
+    return download(p);
+  };
+  await assert.rejects(execute(f.o, f.driver));
+  assert.equal(
+    await readFile(path.join(f.o.taskDir, "result.json"), "utf8"),
+    '{"ok":true}',
+  );
+  f.session.download = download;
+  assert.equal((await execute(f.o, f.driver)).status, "artifacts_ready");
+  assert.equal(f.counts().sent, 1);
+});
