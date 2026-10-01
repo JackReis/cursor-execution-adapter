@@ -1,0 +1,5 @@
+{
+  "expectFiles": ["result.json"],
+  "inputFiles": ["fixture.txt"],
+  "timeoutSeconds": 120
+}

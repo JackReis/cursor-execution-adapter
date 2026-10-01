@@ -1,0 +1,2 @@
+Marker: CURSOR_ADAPTER_FIXTURE_V1
+Numbers: 17, 25

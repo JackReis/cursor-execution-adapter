@@ -1,0 +1,19 @@
+{
+  "run_name": "cursor-fixture",
+  "workdir": "REPLACE_WITH_ABSOLUTE_WORK_DIRECTORY",
+  "max_parallel": 1,
+  "tasks": [
+    {
+      "key": "cursor-fixture",
+      "engine": "cursor-local",
+      "model": "REPLACE_WITH_ACCOUNT_MODEL_ID",
+      "engine_args": ["--request", "REPLACE_WITH_ABSOLUTE_REQUEST_PATH"],
+      "spec": "Read fixture.txt and write result.json with marker CURSOR_ADAPTER_FIXTURE_V1 and the sum of its numbers.",
+      "expect_files": ["result.json"],
+      "check": "node REPLACE_WITH_ABSOLUTE_CHECK_PATH result.json",
+      "timeout_s": 180,
+      "task_type": "probe",
+      "verified": "The returned marker and sum match the independent fixture check."
+    }
+  ]
+}

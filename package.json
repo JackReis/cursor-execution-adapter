@@ -1,0 +1,38 @@
+{
+  "name": "cursor-execution-adapter",
+  "version": "0.1.0",
+  "description": "Independent local and cloud Cursor execution adapter with durable receipts and Ringer integration",
+  "type": "module",
+  "license": "MIT",
+  "private": true,
+  "bin": {
+    "cursor-execution-adapter": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "examples"
+  ],
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "build": "tsc && node -e \"require('fs').chmodSync('dist/cli.js',0o755)\"",
+    "test": "npm run build && node --test test/*.test.mjs",
+    "check": "tsc --noEmit",
+    "prepack": "npm run build"
+  },
+  "dependencies": {
+    "@cursor/sdk": "1.0.35"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.15",
+    "prettier": "3.6.2",
+    "typescript": "5.9.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/JackReis/cursor-execution-adapter.git"
+  }
+}

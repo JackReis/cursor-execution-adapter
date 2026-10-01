@@ -1,0 +1,7 @@
+{
+  "repo": "https://github.com/example/fixture",
+  "ref": "REPLACE_WITH_40_CHARACTER_COMMIT_SHA",
+  "expectFiles": ["result.json"],
+  "inputFiles": ["fixture.txt"],
+  "timeoutSeconds": 300
+}
