@@ -16,77 +16,97 @@ import {
   type Session,
 } from "./core.js";
 export function sdkDriver(apiKey: string): Driver {
-  const options = (o: Options): AgentOptions => ({
-    apiKey,
-    model: { id: o.model },
-    ...(o.mode === "local"
-      ? {
-          tools: ["mcp"],
-          local: {
-            cwd: o.taskDir,
-            customTools: {
-              read_file: {
-                description:
-                  "Read an explicitly supplied input or expected output within the task directory.",
-                inputSchema: {
-                  type: "object",
-                  properties: { path: { type: "string" } },
-                  required: ["path"],
-                  additionalProperties: false,
-                },
-                execute: async (args) => {
-                  const p = relativeFile(args.path);
-                  if (
-                    ![
-                      ...(o.request.inputFiles ?? []),
-                      ...o.request.expectFiles,
-                    ].includes(p)
-                  )
-                    throw new AdapterError("FILE_NOT_ALLOWLISTED");
-                  return (await readSafe(o.taskDir, p, 256 * 1024)).toString(
-                    "utf8",
-                  );
-                },
-              },
-              write_file: {
-                description:
-                  "Write a declared output file within the task directory.",
-                inputSchema: {
-                  type: "object",
-                  properties: {
-                    path: { type: "string" },
-                    content: { type: "string" },
+  let catalog: Awaited<ReturnType<typeof Cursor.models.list>> | undefined;
+  const loadCatalog = async () => {
+    catalog = await Cursor.models.list({ apiKey });
+    return catalog;
+  };
+  const options = async (o: Options): Promise<AgentOptions> => {
+    if (o.request.modelParams?.length) {
+      const models = catalog ?? (await loadCatalog());
+      const model = models.find((m) => m.id === o.model);
+      if (!model) throw new AdapterError("MODEL_UNAVAILABLE");
+      for (const param of o.request.modelParams) {
+        const definition = model.parameters?.find((p) => p.id === param.id);
+        if (!definition?.values.some((v) => v.value === param.value))
+          throw new AdapterError("MODEL_PARAMETER_UNAVAILABLE");
+      }
+    }
+    return {
+      apiKey,
+      model: {
+        id: o.model,
+        ...(o.request.modelParams ? { params: o.request.modelParams } : {}),
+      },
+      ...(o.mode === "local"
+        ? {
+            tools: ["mcp"],
+            local: {
+              cwd: o.taskDir,
+              customTools: {
+                read_file: {
+                  description:
+                    "Read an explicitly supplied input or expected output within the task directory.",
+                  inputSchema: {
+                    type: "object",
+                    properties: { path: { type: "string" } },
+                    required: ["path"],
+                    additionalProperties: false,
                   },
-                  required: ["path", "content"],
-                  additionalProperties: false,
+                  execute: async (args) => {
+                    const p = relativeFile(args.path);
+                    if (
+                      ![
+                        ...(o.request.inputFiles ?? []),
+                        ...o.request.expectFiles,
+                      ].includes(p)
+                    )
+                      throw new AdapterError("FILE_NOT_ALLOWLISTED");
+                    return (await readSafe(o.taskDir, p, 256 * 1024)).toString(
+                      "utf8",
+                    );
+                  },
                 },
-                execute: async (args) => {
-                  const p = relativeFile(args.path);
-                  if (
-                    !o.request.expectFiles.includes(p) ||
-                    typeof args.content !== "string" ||
-                    Buffer.byteLength(args.content) > 16 * 1024 * 1024
-                  )
-                    throw new AdapterError("INVALID_OUTPUT");
-                  await writeSafe(o.taskDir, p, Buffer.from(args.content));
-                  return "written";
+                write_file: {
+                  description:
+                    "Write a declared output file within the task directory.",
+                  inputSchema: {
+                    type: "object",
+                    properties: {
+                      path: { type: "string" },
+                      content: { type: "string" },
+                    },
+                    required: ["path", "content"],
+                    additionalProperties: false,
+                  },
+                  execute: async (args) => {
+                    const p = relativeFile(args.path);
+                    if (
+                      !o.request.expectFiles.includes(p) ||
+                      typeof args.content !== "string" ||
+                      Buffer.byteLength(args.content) > 16 * 1024 * 1024
+                    )
+                      throw new AdapterError("INVALID_OUTPUT");
+                    await writeSafe(o.taskDir, p, Buffer.from(args.content));
+                    return "written";
+                  },
                 },
               },
+              store: new JsonlLocalAgentStore(path.join(o.stateDir, "sdk")),
+              settingSources: [],
+              enableAgentRetries: false,
+              sandboxOptions: { enabled: true },
             },
-            store: new JsonlLocalAgentStore(path.join(o.stateDir, "sdk")),
-            settingSources: [],
-            enableAgentRetries: false,
-            sandboxOptions: { enabled: true },
-          },
-        }
-      : {
-          cloud: {
-            repos: [{ url: o.request.repo!, startingRef: o.request.ref! }],
-            autoCreatePR: false,
-            workOnCurrentBranch: false,
-          },
-        }),
-  });
+          }
+        : {
+            cloud: {
+              repos: [{ url: o.request.repo!, startingRef: o.request.ref! }],
+              autoCreatePR: false,
+              workOnCurrentBranch: false,
+            },
+          }),
+    };
+  };
   const getOptions = (o: Options, id: string) =>
     o.mode === "cloud"
       ? { runtime: "cloud" as const, agentId: id, apiKey }
@@ -104,13 +124,17 @@ export function sdkDriver(apiKey: string): Driver {
     close: () => a[Symbol.asyncDispose](),
   });
   return {
-    models: async () => (await Cursor.models.list({ apiKey })).map((m) => m.id),
+    models: async () => (await loadCatalog()).map((m) => m.id),
     create: async (o, id) =>
       wrap(
-        await Agent.create({ ...options(o), agentId: id, idempotencyKey: id }),
+        await Agent.create({
+          ...(await options(o)),
+          agentId: id,
+          idempotencyKey: id,
+        }),
         o,
       ),
-    resume: async (o, id) => wrap(await Agent.resume(id, options(o)), o),
+    resume: async (o, id) => wrap(await Agent.resume(id, await options(o)), o),
     getRun: (o, id, runId) => Agent.getRun(runId, getOptions(o, id)),
     runs: async (o, id) =>
       (

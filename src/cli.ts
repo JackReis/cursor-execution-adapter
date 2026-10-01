@@ -4,31 +4,38 @@ import { parseArgs } from "node:util";
 import { readFile } from "node:fs/promises";
 import { execute, validateRequest, AdapterError } from "./core.js";
 import { sdkDriver } from "./sdk.js";
-const { positionals, values } = parseArgs({
-  allowPositionals: true,
-  options: {
-    mode: { type: "string" },
-    "task-dir": { type: "string" },
-    "state-dir": { type: "string" },
-    model: { type: "string" },
-    spec: { type: "string" },
-    request: { type: "string" },
-    "timeout-seconds": { type: "string" },
-    help: { type: "boolean" },
-  },
-});
 async function main() {
+  const { positionals, values } = parseArgs({
+    args: process.argv.slice(2),
+    allowPositionals: true,
+    options: {
+      mode: { type: "string" },
+      "task-dir": { type: "string" },
+      "state-dir": { type: "string" },
+      model: { type: "string" },
+      spec: { type: "string" },
+      request: { type: "string" },
+      "timeout-seconds": { type: "string" },
+      help: { type: "boolean" },
+      "no-browser": { type: "boolean" },
+    },
+  });
   if (values.help) {
     console.log(
-      "cursor-execution-adapter run --mode local|cloud --task-dir DIR --state-dir DIR --model ID --spec TEXT --request FILE\ncursor-execution-adapter login | auth-status | preflight\nCredential: browser login (recommended), or CURSOR_API_KEY (environment only). Request: expectFiles, inputFiles, timeoutSeconds; cloud additionally repo and immutable ref.",
+      "cursor-execution-adapter run --mode local|cloud --task-dir DIR --state-dir DIR --model ID --spec TEXT --request FILE\ncursor-execution-adapter login | auth-status | preflight | catalog\nCredential: browser login (recommended), or CURSOR_API_KEY (environment only). Request: expectFiles, inputFiles, timeoutSeconds; cloud additionally repo and immutable ref.",
     );
     return;
   }
   if (positionals[0] === "login") {
     await Cursor.auth.login({
       apiKeyName: "cursor-execution-adapter",
-      onLoginUrl: () => {
-        console.error("Complete Cursor sign-in in the browser window.");
+      openBrowser: !values["no-browser"],
+      onLoginUrl: (url) => {
+        console.error(
+          values["no-browser"]
+            ? url
+            : "Complete Cursor sign-in in the browser window.",
+        );
       },
       signal: AbortSignal.timeout(300000),
     });
@@ -66,6 +73,23 @@ async function main() {
   ]);
   for (const name of Object.keys(process.env))
     if (!keep.has(name)) delete process.env[name];
+  if (positionals[0] === "catalog") {
+    const models = await Cursor.models.list({ apiKey: key });
+    const sdkPackage = JSON.parse(
+      await readFile(
+        new URL("../../package.json", import.meta.resolve("@cursor/sdk")),
+        "utf8",
+      ),
+    );
+    console.log(
+      JSON.stringify({
+        fetchedAt: new Date().toISOString(),
+        sdkVersion: sdkPackage.version,
+        models,
+      }),
+    );
+    return;
+  }
   const driver = sdkDriver(key);
   if (positionals[0] === "preflight") {
     console.log(

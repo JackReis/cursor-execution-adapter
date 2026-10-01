@@ -3,5 +3,11 @@
   "ref": "REPLACE_WITH_40_CHARACTER_COMMIT_SHA",
   "expectFiles": ["result.json"],
   "inputFiles": ["fixture.txt"],
-  "timeoutSeconds": 300
+  "timeoutSeconds": 300,
+  "modelParams": [
+    {
+      "id": "fast",
+      "value": "false"
+    }
+  ]
 }

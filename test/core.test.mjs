@@ -319,3 +319,59 @@ test("timeout requests cancellation and records terminal result", async (t) => {
     "cancelled",
   );
 });
+
+test("automatic routing IDs are rejected before dispatch", async (t) => {
+  const f = await fixture(t);
+  for (const model of ["default", "auto", "auto-smart"])
+    await assert.rejects(
+      execute({ ...f.o, model }, f.driver),
+      /EXPLICIT_MODEL_ID_REQUIRED/,
+    );
+  assert.equal(f.counts().created, 0);
+});
+
+test("failed artifact retrieval still records provider usage", async (t) => {
+  const f = await fixture(t, "cloud");
+  f.session.artifacts = async () => [];
+  await assert.rejects(execute(f.o, f.driver));
+  const r = JSON.parse(await readFile(path.join(f.o.stateDir, "receipt.json")));
+  assert.deepEqual(r.usage, { tokens: 12 });
+});
+test("concurrent stale-lock recovery allows only one active dispatch", async (t) => {
+  const f = await fixture(t);
+  await mkdir(f.o.stateDir);
+  await writeFile(
+    path.join(f.o.stateDir, "lock.json"),
+    JSON.stringify({ pid: 2000000000, host: os.hostname() }),
+  );
+  f.driver.models = async () => {
+    await new Promise((r) => setTimeout(r, 30));
+    return ["test-model"];
+  };
+  const results = await Promise.allSettled(
+    Array.from({ length: 10 }, () => execute(f.o, f.driver)),
+  );
+  assert.equal(results.filter((r) => r.status === "fulfilled").length, 1);
+  assert.equal(f.counts().created, 1);
+  assert.equal(f.counts().sent, 1);
+});
+test("interrupted acquisition guard fails closed for operator reconciliation", async (t) => {
+  const f = await fixture(t);
+  await mkdir(f.o.stateDir);
+  await writeFile(path.join(f.o.stateDir, "acquire.lock"), "unknown-owner");
+  await assert.rejects(execute(f.o, f.driver), /STATE_LOCKED/);
+  assert.equal(f.counts().created, 0);
+});
+test("invalid and duplicate model parameters are rejected", () => {
+  for (const modelParams of [
+    [{ id: "fast", value: true }],
+    [
+      { id: "fast", value: "false" },
+      { id: "fast", value: "true" },
+    ],
+  ])
+    assert.throws(
+      () => validateRequest({ expectFiles: ["out"], modelParams }, "local"),
+      /INVALID_MODEL_PARAMS/,
+    );
+});

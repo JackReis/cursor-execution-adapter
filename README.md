@@ -2,7 +2,7 @@
 
 Independent MIT-licensed glue for running Cursor tasks locally or in Cursor Cloud, collecting artifacts, and handing them to an external verifier such as Ringer.
 
-**Status: experimental.** Automated tests use a fake provider. An authenticated local/cloud pilot is required before treating a deployment as operational. No claim of production readiness or unlimited subscription usage.
+**Status: experimental.** The authenticated local adapter and Ringer local pilot passed with Composer 2.5 on 2026-10-01. The Ringer cloud pilot also passed: retrieved artifacts matched the local checksum and passed the same independent verifier. The initial cloud failure and correction are documented in `VALIDATION.md`. Automated tests also exercise failure/recovery behavior with a fake provider. No claim of unlimited subscription usage.
 
 ## Install and authenticate
 
@@ -14,9 +14,14 @@ npm run build
 node dist/cli.js login
 node dist/cli.js auth-status
 node dist/cli.js preflight
+node dist/cli.js catalog > cursor-models.json
 ```
 
-`login` uses Cursor's browser sign-in flow. Cursor exchanges that sign-in for an expiring, revocable API credential stored by its SDK with owner-only permissions. The credential is never printed. For headless hosts, `CURSOR_API_KEY` supplied by your secret manager is also supported; never put it in a manifest. `preflight` lists account-visible model IDs without starting an agent. SDK login and an already-signed-in Cursor desktop application are distinct.
+`login` uses Cursor's browser sign-in flow. Cursor exchanges that sign-in for an expiring, revocable API credential stored by its SDK with owner-only permissions. The credential is never printed. On a headless host use `login --no-browser` to print the temporary sign-in URL and complete it in your browser. For headless hosts, `CURSOR_API_KEY` supplied by your secret manager is also supported; never put it in a manifest. `preflight` lists account-visible model IDs without starting an agent. SDK login and an already-signed-in Cursor desktop application are distinct.
+
+`catalog` preserves the current account-visible model IDs, aliases, parameters, variants, fetch time, and SDK version. Choose canonical IDs, not ambiguous `latest` aliases; `default`, `auto`, and `auto-smart` routing are rejected. Listing a model does not prove cloud eligibility or actual inference.
+
+Optional `modelParams` in a request is an array of `{ "id": "fast", "value": "false" }` entries, validated against the live model catalog before launch. Composer 2.5 advertises standard and Fast modes; sample requests explicitly choose standard mode. Parameters are model-specific. Requested and reported parameters are retained separately in receipts.
 
 SDK requests consume Cursor plan usage; check your account's allowance and overage settings before running. The adapter neither changes billing settings nor falls back to another provider.
 
@@ -45,7 +50,7 @@ Request fields:
 
 Cloud uses `--mode cloud` with a request based on `examples/cloud-request.json`. Replace the repository and revision with an accessible fixture repository. Declared inputs are included as JSON data in the prompt. This is an explicit upload: review the files first. No directory is uploaded automatically. The whole cloud repository is accessible to its worker, including any repository/team/plugin configuration Cursor loads. Use a dedicated fixture/evidence repository without private host configuration.
 
-Cloud workers publish outputs as `artifacts/<relative output path>`. Only those artifacts are downloaded. Symlinks, traversal, empty outputs, and files over 16 MiB are rejected. No automatic PR is requested. The prompt prohibits commits, pushes, and delegation, but those cloud behaviors are instructions, not an enforced filesystem or source-control permission boundary.
+Cloud workers must write outputs to **`/opt/cursor/artifacts/<relative output path>`**. A repository-relative `artifacts/` folder is not published. The SDK lists the published files as `artifacts/<relative output path>`. Only those artifacts are downloaded. Symlinks, traversal, empty outputs, and files over 16 MiB are rejected. No automatic PR is requested. The prompt prohibits commits, pushes, and delegation, but those cloud behaviors are instructions, not an enforced filesystem or source-control permission boundary.
 
 ## Local permissions
 
@@ -61,7 +66,7 @@ Do not concurrently mutate the task directory from another process. Filesystem c
 
 Repeat the identical invocation with the same state directory to resume a known run or retry artifact retrieval. A changed request is rejected without altering the original receipt. Ambiguous submissions are reconciled by agent/run lookup and are never blindly resubmitted. If reconciliation cannot find exactly one run, stop and inspect the provider. Failed or cancelled attempts require operator review and a new attempt identity; do not delete state to disguise a retry.
 
-SIGINT/SIGTERM and timeouts request cancellation. If a terminal result cannot be confirmed, `cancellation_unconfirmed` prevents replacement execution. A hard kill can interrupt cleanup; rerun with the same state identity to reconcile. External schedulers must allow at least 30 seconds of cancellation grace. SDK checkpoints may contain full working context: protect and retain them accordingly.
+SIGINT/SIGTERM and timeouts request cancellation. If a terminal result cannot be confirmed, `cancellation_unconfirmed` prevents replacement execution. Stale process-lock recovery is serialized. If a process dies during the short acquisition step, a remaining `acquire.lock` requires operator inspection before removal; the adapter will not guess that ownership is safe to discard. A hard kill can interrupt cleanup; rerun with the same state identity to reconcile. External schedulers must allow at least 30 seconds of cancellation grace. SDK checkpoints may contain full working context: protect and retain them accordingly.
 
 ## Ringer connection
 

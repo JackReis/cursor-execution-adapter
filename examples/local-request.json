@@ -1,5 +1,11 @@
 {
   "expectFiles": ["result.json"],
   "inputFiles": ["fixture.txt"],
-  "timeoutSeconds": 120
+  "timeoutSeconds": 120,
+  "modelParams": [
+    {
+      "id": "fast",
+      "value": "false"
+    }
+  ]
 }
